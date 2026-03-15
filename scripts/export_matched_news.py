@@ -105,15 +105,15 @@ def export_matched_news():
     # 2. 加载频率词
     word_groups, filter_words, global_filters = load_frequency_words()
 
-    # 3. 读取当天所有标题
-    all_results, id_to_name, _ = read_all_today_titles_from_storage(storage)
+    # 3. 读取当天所有标题（含热度指标）
+    all_results, id_to_name, title_info = read_all_today_titles_from_storage(storage)
 
     if not all_results:
         print("[export] 今天没有抓取到任何数据，跳过")
         return
 
-    # 4. 按大类分组 + 跨平台去重
-    # title_map: {category: {title: {"sources": [...], "url": "..."}}}
+    # 4. 按大类分组 + 跨平台去重 + 合并热度指标
+    # title_map: {category: {title: {"sources": [...], "url": "...", "count": N, ...}}}
     title_map = {}
 
     for source_id, titles in all_results.items():
@@ -125,17 +125,36 @@ def export_matched_news():
             if not category:
                 continue
 
+            # 从 title_info 提取热度数据
+            info = title_info.get(source_id, {}).get(title, {})
+            count = info.get("count", 1)
+            ranks = info.get("ranks", [])
+            min_rank = min(ranks) if ranks else 50
+            first_time = info.get("first_time", "")
+            last_time = info.get("last_time", "")
+
             if category not in title_map:
                 title_map[category] = {}
 
             if title in title_map[category]:
-                # 已有相同标题 — 合并来源
-                if source_name not in title_map[category][title]["sources"]:
-                    title_map[category][title]["sources"].append(source_name)
+                # 已有相同标题 — 合并来源和热度
+                existing = title_map[category][title]
+                if source_name not in existing["sources"]:
+                    existing["sources"].append(source_name)
+                existing["count"] = existing["count"] + count
+                existing["min_rank"] = min(existing["min_rank"], min_rank)
+                if first_time and (not existing["first_time"] or first_time < existing["first_time"]):
+                    existing["first_time"] = first_time
+                if last_time and (not existing["last_time"] or last_time > existing["last_time"]):
+                    existing["last_time"] = last_time
             else:
                 title_map[category][title] = {
                     "sources": [source_name],
                     "url": data.get("url", ""),
+                    "count": count,
+                    "min_rank": min_rank,
+                    "first_time": first_time,
+                    "last_time": last_time,
                 }
 
     if not title_map:
@@ -152,13 +171,17 @@ def export_matched_news():
                 "title": title,
                 "sources": info["sources"],
                 "url": info["url"],
+                "count": info["count"],
+                "min_rank": info["min_rank"],
+                "first_time": info["first_time"],
+                "last_time": info["last_time"],
             })
         categories_payload[category] = items
         total_count += len(items)
 
     now = datetime.now()
     payload = {
-        "event_type": "new_articles",
+        "event_type": "accumulate_news",
         "client_payload": {
             "date": now.strftime("%Y-%m-%d"),
             "crawl_time": now.strftime("%H:%M"),
