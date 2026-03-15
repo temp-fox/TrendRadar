@@ -41,7 +41,7 @@ app:
 # ===============================================================
 schedule:
   enabled: true                         # 是否启用调度系统
-  preset: "morning_evening"             # 预设模板名称（见上方说明）
+  preset: "custom"                      # 自定义三段式推送（早7/中12/晚18）
 
 
 # ===============================================================
@@ -199,12 +199,12 @@ display:
   regions:
     new_items: true # 新增热点区域（含热榜新增 + RSS 新增）
     hotlist: true # 热榜区域（关键词匹配的热点新闻）
-    rss: true # RSS 订阅区域
-    standalone: true # 独立展示区（完整热榜/RSS，不受关键词过滤）
-    ai_analysis: true # AI 分析区域
+    rss: false # RSS 订阅区域
+    standalone: false # 独立展示区（完整热榜/RSS，不受关键词过滤）
+    ai_analysis: false # AI 分析区域（已关闭）
   standalone:
-    platforms: ["zhihu","wallstreetcn-hot","toutiao","baidu","thepaper","bilibili-hot-search","cls-hot","ifeng","weibo","douyin","tieba"] # 热榜平台 ID 列表（如 ["zhihu", "weibo"]）
-    rss_feeds: ["hacker-news","ruanyifeng","yahoo-finance"] # RSS 源 ID 列表（如 ["hacker-news"]）
+    platforms: [] # 不使用独立展示区
+    rss_feeds: [] # 不使用独立展示区
     max_items: 20                     # 每个源最多展示条数（0=不限制）
 
 
@@ -389,7 +389,7 @@ ai:
 # 模型配置见上方 ai 配置段
 # ===============================================================
 ai_analysis:
-  enabled: true                     # 是否启用 AI 分析（总开关）
+  enabled: false                     # 不启用 AI 分析
                                     # ⚠️ 开启调度系统后，此项仍为总开关：
                                     #   false → 永远不分析（无论调度怎么设置）
                                     #   true  → 由调度的 analyze 字段控制何时分析

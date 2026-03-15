@@ -132,3 +132,10 @@ jobs:
           S3_REGION: ${{ secrets.S3_REGION }}
           GITHUB_ACTIONS: true
         run: python -m trendradar
+
+      - name: Export and dispatch matched news
+        if: success()
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          AI_NEWS_WRITER_REPO: ${{ secrets.AI_NEWS_WRITER_REPO }}
+        run: python scripts/export_matched_news.py
