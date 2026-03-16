@@ -10,7 +10,7 @@
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import urllib.request
 import urllib.error
@@ -179,7 +179,9 @@ def export_matched_news():
         categories_payload[category] = items
         total_count += len(items)
 
-    now = datetime.now()
+    # 使用北京时间，与 ai-news-writer 的 rewrite.yml 保持一致
+    beijing_tz = timezone(timedelta(hours=8))
+    now = datetime.now(beijing_tz)
     payload = {
         "event_type": "accumulate_news",
         "client_payload": {
