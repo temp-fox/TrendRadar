@@ -45,6 +45,12 @@ CATEGORY_MAP = {
     "养生食材": "养生美食",
     "养生食谱": "养生美食",
     "茶饮养生": "养生美食",
+    "减肥瘦身": "养生美食",
+    "美容养颜": "养生美食",
+    "中医理疗": "养生美食",
+    "骨骼关节": "养生美食",
+    "营养保健": "养生美食",
+    "运动养生": "养生美食",
     # 民生
     "社会保障": "民生",
     "住房民生": "民生",
@@ -55,6 +61,31 @@ CATEGORY_MAP = {
     "安全与灾害": "民生",
     "人口与家庭": "民生",
 }
+
+BLOCKED_TOPIC_PATTERNS = [
+    "金价",
+    "银价",
+    "油价",
+    "国际油价",
+    "国内油价",
+    "成品油价",
+    "汽油价格",
+    "柴油价格",
+    "原油价格",
+    "国际原油",
+    "布伦特原油",
+    "wti原油",
+    "黄金价格",
+    "白银价格",
+    "黄金走势",
+    "白银走势",
+    "金饰价格",
+    "足金价格",
+]
+
+
+def is_blocked_topic(title_lower):
+    return any(_word_matches(pattern, title_lower) for pattern in BLOCKED_TOPIC_PATTERNS)
 
 
 def match_title_to_category(title, word_groups, filter_words, global_filters):
@@ -76,6 +107,10 @@ def match_title_to_category(title, word_groups, filter_words, global_filters):
     for filter_item in filter_words:
         if _word_matches(filter_item, title_lower):
             return None
+
+    # 禁题材硬拦截
+    if is_blocked_topic(title_lower):
+        return None
 
     # 词组匹配 — 找到第一个匹配的词组，返回对应大类
     for group in word_groups:
