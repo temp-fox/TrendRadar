@@ -25,9 +25,10 @@ from trendradar.storage.local import LocalStorageBackend
 
 # 词组 display_name → 大类 的映射
 CATEGORY_MAP = {
-    # 养老金
+    # 养老金（政策类：养老金、退休金、社保等）
     "养老金政策": "养老金",
-    "养老生活": "养老金",
+    # 养老（生活类：养老服务、老人关怀、退休生活等）
+    "养老生活": "养老",
     # 养生美食
     "养生总论": "养生美食",
     "健脾养胃": "养生美食",
