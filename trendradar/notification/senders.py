@@ -24,7 +24,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -166,13 +166,27 @@ def send_to_feishu(
             f"发送{log_prefix}第 {i}/{len(batches)} 批次，大小：{content_size} 字节 [{report_type}]"
         )
 
-        # 飞书 webhook 只显示 content.text，所有信息都整合到 text 中
-        payload = {
-            "msg_type": "text",
-            "content": {
-                "text": batch_content,
-            },
-        }
+        # 根据 webhook 域名选择 payload 格式
+        # www.feishu.cn 使用纯文本格式，其他域名（open.feishu.cn/open.larksuite.com）使用卡片 2.0
+        if "www.feishu.cn" in webhook_url:
+            payload = {
+                "msg_type": "text",
+                "content": {
+                    "text": batch_content,
+                },
+            }
+        else:
+            payload = {
+                "msg_type": "interactive",
+                "card": {
+                    "schema": "2.0",
+                    "body": {
+                        "elements": [
+                            {"tag": "markdown", "content": batch_content}
+                        ]
+                    },
+                },
+            }
 
         try:
             response = requests.post(
@@ -804,11 +818,10 @@ def send_to_ntfy(
 
     # 避免 HTTP header 编码问题
     report_type_en_map = {
-        "当日汇总": "Daily Summary",
-        "当前榜单汇总": "Current Ranking",
-        "增量更新": "Incremental Update",
-        "实时增量": "Realtime Incremental",
-        "实时当前榜单": "Realtime Current Ranking",
+        "全天汇总": "Daily Summary",
+        "当前榜单": "Current Ranking",
+        "增量分析": "Incremental Update",
+        "通知连通性测试": "Notification Test",
     }
     report_type_en = report_type_en_map.get(report_type, "News Report")
 
@@ -1325,7 +1338,7 @@ def send_to_generic_webhook(
     # 获取分批内容
     # 使用 'wework' 作为 format_type 以获取 markdown 格式的通用输出
     # 预留一定空间给模板外壳
-    template_overhead = 200 
+    template_overhead = 200
     batches = split_content_func(
         report_data, "wework", update_info, max_bytes=batch_size - template_overhead, mode=mode,
         rss_items=rss_items,

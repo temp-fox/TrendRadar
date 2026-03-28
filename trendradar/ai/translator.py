@@ -6,12 +6,11 @@ AI 翻译器模块
 基于 LiteLLM 统一接口，支持 100+ AI 提供商
 """
 
-import json
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from trendradar.ai.client import AIClient
+from trendradar.ai.prompt_loader import load_prompt_template
 
 
 @dataclass
@@ -30,6 +29,9 @@ class BatchTranslationResult:
     success_count: int = 0
     fail_count: int = 0
     total_count: int = 0
+    prompt: str = ""                # debug: 发送给 AI 的完整 prompt
+    raw_response: str = ""          # debug: AI 原始响应
+    parsed_count: int = 0           # debug: AI 响应解析出的条目数
 
 
 class AITranslator:
@@ -49,43 +51,16 @@ class AITranslator:
         # 翻译配置
         self.enabled = translation_config.get("ENABLED", False)
         self.target_language = translation_config.get("LANGUAGE", "English")
+        self.scope = translation_config.get("SCOPE", {"HOTLIST": True, "RSS": True, "STANDALONE": True})
 
         # 创建 AI 客户端（基于 LiteLLM）
         self.client = AIClient(ai_config)
 
         # 加载提示词模板
-        self.system_prompt, self.user_prompt_template = self._load_prompt_template(
-            translation_config.get("PROMPT_FILE", "ai_translation_prompt.txt")
+        self.system_prompt, self.user_prompt_template = load_prompt_template(
+            translation_config.get("PROMPT_FILE", "ai_translation_prompt.txt"),
+            label="翻译",
         )
-
-    def _load_prompt_template(self, prompt_file: str) -> tuple:
-        """加载提示词模板"""
-        config_dir = Path(__file__).parent.parent.parent / "config"
-        prompt_path = config_dir / prompt_file
-
-        if not prompt_path.exists():
-            print(f"[翻译] 提示词文件不存在: {prompt_path}")
-            return "", ""
-
-        content = prompt_path.read_text(encoding="utf-8")
-
-        # 解析 [system] 和 [user] 部分
-        system_prompt = ""
-        user_prompt = ""
-
-        if "[system]" in content and "[user]" in content:
-            parts = content.split("[user]")
-            system_part = parts[0]
-            user_part = parts[1] if len(parts) > 1 else ""
-
-            if "[system]" in system_part:
-                system_prompt = system_part.split("[system]")[1].strip()
-
-            user_prompt = user_part.strip()
-        else:
-            user_prompt = content
-
-        return system_prompt, user_prompt
 
     def translate(self, text: str) -> TranslationResult:
         """
@@ -196,11 +171,21 @@ class AITranslator:
             user_prompt = user_prompt.replace("{target_language}", self.target_language)
             user_prompt = user_prompt.replace("{content}", batch_content)
 
+            # 记录 debug 信息（包含完整的 system + user prompt）
+            if self.system_prompt:
+                batch_result.prompt = f"[system]\n{self.system_prompt}\n\n[user]\n{user_prompt}"
+            else:
+                batch_result.prompt = user_prompt
+
             # 调用 AI API
             response = self._call_ai(user_prompt)
 
+            # 记录 AI 原始响应
+            batch_result.raw_response = response
+
             # 解析批量翻译结果
-            translated_texts = self._parse_batch_response(response, len(non_empty_texts))
+            translated_texts, raw_parsed_count = self._parse_batch_response(response, len(non_empty_texts))
+            batch_result.parsed_count = raw_parsed_count
 
             # 填充结果
             for idx, translated in zip(non_empty_indices, translated_texts):
@@ -223,7 +208,7 @@ class AITranslator:
             lines.append(f"[{i}] {text}")
         return "\n".join(lines)
 
-    def _parse_batch_response(self, response: str, expected_count: int) -> List[str]:
+    def _parse_batch_response(self, response: str, expected_count: int) -> tuple:
         """
         解析批量翻译响应
 
@@ -232,7 +217,7 @@ class AITranslator:
             expected_count: 期望的翻译数量
 
         Returns:
-            List[str]: 翻译结果列表
+            tuple: (翻译结果列表, AI 原始解析出的条目数)
         """
         results = []
         lines = response.strip().split("\n")
@@ -266,6 +251,7 @@ class AITranslator:
         # 按索引排序并提取文本
         results.sort(key=lambda x: x[0])
         translated = [text for _, text in results]
+        raw_parsed_count = len(translated)
 
         # 如果解析结果数量不匹配，尝试简单按行分割
         if len(translated) != expected_count:
@@ -278,12 +264,13 @@ class AITranslator:
                     translated.append(stripped[bracket_end + 1:].strip())
                 elif stripped:
                     translated.append(stripped)
+            raw_parsed_count = len(translated)
 
         # 确保返回正确数量
         while len(translated) < expected_count:
             translated.append("")
 
-        return translated[:expected_count]
+        return translated[:expected_count], raw_parsed_count
 
     def _call_ai(self, user_prompt: str) -> str:
         """调用 AI API（使用 LiteLLM）"""
