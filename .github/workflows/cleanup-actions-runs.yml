@@ -1,0 +1,79 @@
+name: Clean Action Runs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete completed workflow runs
+        id: cleanup
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              {
+                owner,
+                repo,
+                per_page: 100,
+              }
+            );
+
+            let deleted = 0;
+            let skipped = 0;
+            let failed = 0;
+
+            core.info(`Found ${runs.length} workflow runs.`);
+
+            for (const run of runs) {
+              if (run.status !== 'completed') {
+                skipped += 1;
+                core.info(`Skip #${run.id} ${run.name} (${run.status})`);
+                continue;
+              }
+
+              try {
+                await github.rest.actions.deleteWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: run.id,
+                });
+                deleted += 1;
+                core.info(`Deleted #${run.id} ${run.name} (${run.conclusion || 'completed'})`);
+              } catch (error) {
+                failed += 1;
+                core.warning(`Failed to delete #${run.id}: ${error.message}`);
+              }
+            }
+
+            await core.summary
+              .addHeading('Cleanup summary')
+              .addTable([
+                [
+                  {data: 'Deleted', header: true},
+                  {data: 'Skipped', header: true},
+                  {data: 'Failed', header: true},
+                ],
+                [String(deleted), String(skipped), String(failed)],
+              ])
+              .write();
+
+            core.setOutput('deleted', String(deleted));
+            core.setOutput('skipped', String(skipped));
+            core.setOutput('failed', String(failed));
+
+      - name: Print result
+        run: |
+          echo "Deleted: ${{ steps.cleanup.outputs.deleted }}"
+          echo "Skipped: ${{ steps.cleanup.outputs.skipped }}"
+          echo "Failed: ${{ steps.cleanup.outputs.failed }}"
