@@ -9,6 +9,7 @@
 
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone, timedelta
 
@@ -60,6 +61,10 @@ CATEGORY_MAP = {
     "安全与灾害": "民生",
     "人口与家庭": "民生",
 }
+
+def _norm(t: str) -> str:
+    return re.sub(r'\s+', '', t).lower()
+
 
 BLOCKED_TOPIC_PATTERNS = [
     "金价",
@@ -170,9 +175,10 @@ def export_matched_news():
             if category not in title_map:
                 title_map[category] = {}
 
-            if title in title_map[category]:
+            title_norm = _norm(title)
+            if title_norm in title_map[category]:
                 # 已有相同标题 — 合并来源和热度
-                existing = title_map[category][title]
+                existing = title_map[category][title_norm]
                 if source_name not in existing["sources"]:
                     existing["sources"].append(source_name)
                 existing["count"] = existing["count"] + count
@@ -182,7 +188,8 @@ def export_matched_news():
                 if last_time and (not existing["last_time"] or last_time > existing["last_time"]):
                     existing["last_time"] = last_time
             else:
-                title_map[category][title] = {
+                title_map[category][title_norm] = {
+                    "title": title,
                     "sources": [source_name],
                     "url": data.get("url", ""),
                     "count": count,
@@ -200,9 +207,9 @@ def export_matched_news():
     total_count = 0
     for category, titles in title_map.items():
         items = []
-        for title, info in titles.items():
+        for title_norm, info in titles.items():
             items.append({
-                "title": title,
+                "title": info["title"],
                 "sources": info["sources"],
                 "url": info["url"],
                 "count": info["count"],
